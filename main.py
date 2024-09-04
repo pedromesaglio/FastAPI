@@ -1,93 +1,109 @@
 from typing import Union
-from fastapi import FastAPI, Body
-from fastapi.responses import HTMLResponse
-
+from fastapi import FastAPI, Body, Path, Query
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, FileResponse
+from pydantic import BaseModel, Field
+from typing import Optional, List
+import datetime
 
 app = FastAPI()
 
 
-movies = [
-    {
-        "id": 1,
-        "title": "Avatar",
-        "overview": "En un exuberante planeta llamado Pandora viven los Na'vi, seres que ...",
-        "year": "2009",
-        "rating": 7.8,
-        "category": "Acción"
-    },
-    {
-        "id": 2,
-        "title": "Cars",
-        "overview": "En un mundo poblado por vehiculos, la carrera de los 400 de Dinoco marca el climax de la ultima temporada de la Copa Piston en el Autodromo de Sur.",
-        "year": "2006",
-        "rating": 7.2,
-        "category": "Sports"
+class Movie(BaseModel):
+    id: int
+    title: str 
+    overview: str
+    year: int
+    rating: float
+    category: str
+
+class MovieCreate(BaseModel):
+    id: int
+    title: str = Field(min_length=5, max_length=15)
+    overview: str = Field(min_length=15, max_length=50)
+    year: int = Field(le=datetime.date.today().year, ge=1900)
+    rating: float = Field(ge=0, le=10)
+    category: str = Field(min_legth=5, max_legth=20)
+    
+    model_config = {
+        'json_schema_extra':{
+            'example':{
+                'id':1,
+                "title": 'My Movie',
+                'overview': 'Esta pelicula trata acerda de ...',
+                'year': 2022,
+                'rating':5,
+                'category': 'Comedia'
+            }
+        }
     }
-    ]
+
+
+class MovieUpdate(BaseModel):
+    title: str 
+    overview: str
+    year: int
+    rating: float
+    category: str
+    
+
+
+movies: List[Movie] = []
 
 
 @app.get("/", tags=['Home'])
 def home():
-    return {"Hello World"}
+    return PlainTextResponse(content='Home')
 
 
 @app.get("/movies", tags=['Movies'])
-def get_movies():
-    return movies 
+def get_movies() -> List[Movie]:
+    content = [movie.model_dump() for movie in movies] 
+    return JSONResponse(content=content) 
 
 @app.get("/movies/{id}", tags=['Movies'])
-def get_movie(id: int):
+def get_movie(id: int = Path(gt=0)) -> Movie | dict:
     for movie in movies:
-        if movie['id'] == id:
-            return movie
-    return[]
+        if movie.id == id:
+            return JSONResponse(content=movie.model_dump()) 
+    return JSONResponse(content={})
 
 
 @app.get("/movies/", tags=['Movies'])
-def get_movie_by_category(category: str, year: int):
+def get_movie_by_category(category: str = Query(min_length=5, max_length=20)) -> Movie | dict:
     for movie in movies:
-        if movie['category'] == category:
-            return movie
-    return[]
+        if movie.category == category:
+            return JSONResponse(content=movie.model_dump())
+    return JSONResponse(content={}) 
 
 @app.post('/movies', tags=['Movies'])
-def create_movie(id: int = Body(),
-                 title: str = Body(),
-                 overview: str = Body(),
-                 year: int = Body(),
-                 rating: float = Body(),
-                 category: str = Body()):
-    movies.append({
-        'id': id,
-        'title': title,
-        'overview': overview,
-        'year': year,
-        'rating': rating,
-        'category': category
-    })
-    return movies
+def create_movie(movie: MovieCreate) -> List[Movie]:
+    movies.append(movie)
+    content = [movie.model_dump() for movie in movies] 
+    return JSONResponse(content=content)
+    
+
 
 @app.put('/movies/{id}', tags=['Movies'])
-def update_movie(
-    id: int,
-    title: str = Body(),
-    overview: str = Body(),
-    year: int = Body(),
-    rating: float = Body(),
-    category: str = Body()
-    ):
-    for movie in movies:
-        if movie['id'] == id:
-            movie['title'] = title
-            movie['overview']= overview
-            movie['year'] = year
-            movie['rating'] = rating
-            movie['category'] = category
-    return movies
+def update_movie(id: int, movie: MovieUpdate) -> List[Movie]:
+    for item in movies:
+        if item.id == id:
+            item.title = movie.title
+            item.overview= movie.overview
+            item.year = movie.year
+            item.rating = movie.rating
+            item.category = movie.category
+    content = [movie.model_dump() for movie in movies] 
+    return JSONResponse(content=content)
             
 @app.delete('/movies/{id}', tags=['Movies'])
-def delete_movie(id: int):
+def delete_movie(id: int) -> List[Movie]:
     for movie in movies:
-        if movie['id'] == id:
+        if movie.id == id:
             movies.remove(movie)
-    return movies
+    content = [movie.model_dump() for movie in movies] 
+    return JSONResponse(content=content)
+
+
+@app.get('/get_file')
+def get_file():
+    return FileResponse('file.pdf')
